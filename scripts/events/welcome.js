@@ -1,7 +1,7 @@
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
-const { createCanvas, loadImage, registerFont } = require("canvas");
+const { createCanvas, loadImage } = require("canvas");
 
 module.exports = {
     config: {
@@ -19,33 +19,36 @@ module.exports = {
                 if (userID === api.getCurrentUserID()) continue;
 
                 try {
-                    // ১. ডাটা কালেকশন
-                    const threadInfo = await threadsData.get(threadID);
+                    // ১. ডাটা সংগ্রহ
+                    const threadInfo = await threadsData.get(threadID) || {};
                     const threadName = threadInfo.threadName || "Our Group";
                     const userName = await usersData.getName(userID) || "New Member";
-                    const memberCount = threadInfo.members.length;
+                    const memberCount = (threadInfo.members || []).length;
 
-                    // ২. ক্যানভাস সেটআপ (Premium Resolution)
+                    // ২. ক্যানভাস সেটআপ (1200x600 HD)
                     const canvas = createCanvas(1200, 600);
                     const ctx = canvas.getContext("2d");
 
-                    // ৩. ডার্ক প্রিমিয়াম ব্যাকগ্রাউন্ড
-                    const bgUrl = "https://i.imgur.com/vHq0L98.jpeg"; // একটি সুন্দর অ্যাবস্ট্রাক্ট ব্যাকগ্রাউন্ড
-                    const background = await loadImage(bgUrl);
-                    ctx.drawImage(background, 0, 0, 1200, 600);
+                    // ৩. প্রিমিয়াম ডার্ক ব্যাকগ্রাউন্ড (লিঙ্ক নষ্ট হলেও চলবে)
+                    try {
+                        const bgUrl = "https://i.imgur.com/vHq0L98.jpeg";
+                        const background = await loadImage(bgUrl);
+                        ctx.drawImage(background, 0, 0, 1200, 600);
+                    } catch (e) {
+                        ctx.fillStyle = "#0f0f0f"; // Fallback Dark
+                        ctx.fillRect(0, 0, 1200, 600);
+                    }
 
-                    // ওভারলে (ঝাপসা কালো পর্দা যাতে লেখা ফুটে ওঠে)
-                    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-                    ctx.fillRect(0, 0, 1200, 600);
-
-                    // ৪. প্রোফাইল পিকচার ড্রয়িং (সাদা বর্ডারসহ)
+                    // ৪. মেম্বার প্রোফাইল পিকচার (White Glow Effect)
                     const avatarUrl = `https://graph.facebook.com/${userID}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
                     const avatar = await loadImage(avatarUrl);
 
                     ctx.save();
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = "white";
                     ctx.beginPath();
                     ctx.arc(600, 200, 150, 0, Math.PI * 2, true);
-                    ctx.lineWidth = 15;
+                    ctx.lineWidth = 12;
                     ctx.strokeStyle = "#ffffff";
                     ctx.stroke();
                     ctx.closePath();
@@ -53,45 +56,46 @@ module.exports = {
                     ctx.drawImage(avatar, 450, 50, 300, 300);
                     ctx.restore();
 
-                    // ৫. টেক্সট স্টাইলিং (Premium Look)
+                    // ৫. স্টাইলিশ টেক্সট ড্রয়িং
                     ctx.textAlign = "center";
-                    ctx.fillStyle = "#ffffff";
 
-                    // নাম (বোল্ড গোল্ডেন কালার)
-                    ctx.font = "bold 70px Arial";
-                    const gradient = ctx.createLinearGradient(0, 0, 1200, 0);
+                    // Welcome Baby (Stylish Text)
+                    ctx.font = "bold 55px Arial";
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillText("ＷＥＬＣＯＭＥ  ＢＡＢＹ", 600, 420);
+
+                    // ইউজার নেম (Gradient Golden)
+                    const gradient = ctx.createLinearGradient(0, 430, 0, 500);
                     gradient.addColorStop(0, "#FFD700");
                     gradient.addColorStop(1, "#FFA500");
+                    ctx.font = "bold 75px Arial";
                     ctx.fillStyle = gradient;
-                    ctx.fillText(userName.toUpperCase(), 600, 420);
+                    ctx.fillText(userName.toUpperCase(), 600, 490);
 
-                    // ওয়েলকাম মেসেজ
-                    ctx.font = "40px Arial";
-                    ctx.fillStyle = "#ffffff";
-                    ctx.fillText(`WELCOME TO ${threadName.toUpperCase()}`, 600, 480);
-
-                    // মেম্বার সংখ্যা
-                    ctx.font = "30px Arial";
+                    // গ্রুপ নেম ও মেম্বার কাউন্ট
+                    ctx.font = "35px Arial";
                     ctx.fillStyle = "#00FFCC";
-                    ctx.fillText(`YOU ARE OUR ${memberCount}th MEMBER ✨`, 600, 540);
+                    ctx.fillText(`Group: ${threadName} | Member: #${memberCount}`, 600, 550);
 
-                    // ৬. ফাইল সেন্ড করা
-                    const cachePath = path.join(__dirname, "cache", `welcome_${userID}.png`);
-                    if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
+                    // ৬. ক্যাশ হ্যান্ডেলিং
+                    const cacheDir = path.join(__dirname, "cache");
+                    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+                    const cachePath = path.join(cacheDir, `welcome_${userID}.png`);
                     
                     fs.writeFileSync(cachePath, canvas.toBuffer("image/png"));
 
+                    // ৭. মেসেজ সেন্ড (Stylish Owner Name)
                     const msg = {
-                        body: `🌸 WELLCOME BABY 😗✌️, ${userName}!\n\n💖 আমাদের "${threadName}" গ্রুপে আপনাকে পেয়ে আমরা অনেক খুশি।\n🎀 আপনি আমাদের ${memberCount} তম মেম্বার। ভালো থাকবেন আমাদের সাথে! ✨`,
+                        body: `✨ 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 𝗕𝗮𝗯𝘆, ${userName}! ✨\n━━━━━━━━━━━━━━━━━━\n💖 আমাদের "${threadName}" গ্রুপে আপনাকে পেয়ে আমরা ধন্য।\n🎀 আপনি আমাদের ${memberCount} তম মেম্বার। ভালো থাকবেন বেবি! 🥀\n━━━━━━━━━━━━━━━━━━\n👤 𝗢𝘄𝗻𝗲𝗿: 𝓣𝓪𝔀𝓱𝓲𝓭 𝓐𝓱𝓶𝓮𝓭\n🎀 𝗔𝘀𝘀𝗶𝘀𝘁𝗮𝗻𝘁: 𝗡𝗲𝘇𝘂𝗸𝗼 𝗖𝗵𝗮𝗻`,
                         attachment: fs.createReadStream(cachePath)
                     };
 
-                    api.sendMessage(msg, threadID, () => {
+                    return api.sendMessage(msg, threadID, () => {
                         if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
                     });
 
                 } catch (err) {
-                    console.error("Welcome Event Error:", err);
+                    console.error("Welcome Double Check Error:", err);
                 }
             }
         }

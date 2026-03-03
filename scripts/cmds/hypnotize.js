@@ -8,7 +8,7 @@ module.exports = {
     role: 0,
     author: "TawHid_Bbz",
     description: "Hypnotize a member",
-    category: "psycho"
+    category: "fun"
   },
 
   onStart: async function ({ api, event, message, usersData }) {

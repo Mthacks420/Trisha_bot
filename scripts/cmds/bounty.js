@@ -4,7 +4,7 @@ module.exports.config = {
     hasPermssion: 0,
     credits: "Tawhid Ahmed",
     description: "কারো নামে হুলিয়া বা বাউন্টি জারি করার ফানি কমান্ড",
-    commandCategory: "Fun",
+    Category: "Fun",
     usages: "bounty @mention / reply to message",
     cooldowns: 5
 };

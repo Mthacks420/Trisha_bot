@@ -1,4 +1,4 @@
-.cmd install brainwash.js module.exports = {
+    module.exports = {
     config: {
         name: "brainwash",
         version: "2.2.0",

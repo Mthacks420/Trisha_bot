@@ -1,123 +1,99 @@
-const { getTime, drive } = global.utils;
-if (!global.temp.welcomeEvent)
-	global.temp.welcomeEvent = {};
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
+const { createCanvas, loadImage, registerFont } = require("canvas");
 
 module.exports = {
-	config: {
-		name: "welcome",
-		version: "1.7",
-		author: "Tawhid Ahmed",
-		category: "events"
-	},
+    config: {
+        name: "welcome",
+        author: "Tawhid Ahmed"
+    },
 
-	langs: {
-		vi: {
-			session1: "sáng",
-			session2: "trưa",
-			session3: "chiều",
-			session4: "tối",
-			welcomeMessage: "🌸 Nezuko Chan has arrived!\nPrefix bot: %1\nType %1help to see commands.",
-			multiple1: "bạn",
-			multiple2: "các bạn",
-			defaultWelcomeMessage: "Xin chào {userName}.\nChào mừng bạn đến với {boxName}.\nChúc bạn có buổi {session} vui vẻ!"
-		},
-		en: {
-			session1: "Morning ☀️",
-			session2: "Noon 🌤️",
-			session3: "Afternoon ⛅",
-			session4: "Evening 🌙",
-			welcomeMessage: "╔═══════════════════╗\n   🌸 NEZUKO CHAN ONLINE ✨\n╚═══════════════════╝\n\nThank you for inviting me! ❤️\n⚙️ Bot Prefix: %1\n📖 Type %1help for commands.\n\nEnjoy your stay! 🎀",
-			multiple1: "new member",
-			multiple2: "new members",
-			defaultWelcomeMessage: "╔═══════════════════╗\n   WELCOME TO OUR GROUP ✨\n╚═══════════════════╝\n\nHello {userName}! 👋\n\nWelcome {multiple} to {boxName} 🎀\nHave a wonderful {session}! 😊\n\n© Powered by Tawhid Ahmed"
-		}
-	},
+    onStart: async function ({ api, event, usersData, threadsData }) {
+        if (event.logMessageType === "log:subscribe") {
+            const { threadID } = event;
+            const { addedParticipants } = event.logMessageData;
 
-	onStart: async ({ threadsData, message, event, api, getLang }) => {
-		if (event.logMessageType == "log:subscribe") {
-			const hours = getTime("HH");
-			const { threadID } = event;
-			const { nickNameBot } = global.GoatBot.config;
-			const prefix = global.utils.getPrefix(threadID);
-			const dataAddedParticipants = event.logMessageData.addedParticipants;
+            for (let participant of addedParticipants) {
+                const userID = participant.userFbId;
+                if (userID === api.getCurrentUserID()) continue;
 
-			// if new member is bot
-			if (dataAddedParticipants.some((item) => item.userFbId == api.getCurrentUserID())) {
-				if (nickNameBot)
-					api.changeNickname(nickNameBot, threadID, api.getCurrentUserID());
-				return message.send(getLang("welcomeMessage", prefix));
-			}
+                try {
+                    // ১. ডাটা কালেকশন
+                    const threadInfo = await threadsData.get(threadID);
+                    const threadName = threadInfo.threadName || "Our Group";
+                    const userName = await usersData.getName(userID) || "New Member";
+                    const memberCount = threadInfo.members.length;
 
-			// if new member:
-			if (!global.temp.welcomeEvent[threadID])
-				global.temp.welcomeEvent[threadID] = {
-					joinTimeout: null,
-					dataAddedParticipants: []
-				};
+                    // ২. ক্যানভাস সেটআপ (Premium Resolution)
+                    const canvas = createCanvas(1200, 600);
+                    const ctx = canvas.getContext("2d");
 
-			global.temp.welcomeEvent[threadID].dataAddedParticipants.push(...dataAddedParticipants);
-			clearTimeout(global.temp.welcomeEvent[threadID].joinTimeout);
+                    // ৩. ডার্ক প্রিমিয়াম ব্যাকগ্রাউন্ড
+                    const bgUrl = "https://i.imgur.com/vHq0L98.jpeg"; // একটি সুন্দর অ্যাবস্ট্রাক্ট ব্যাকগ্রাউন্ড
+                    const background = await loadImage(bgUrl);
+                    ctx.drawImage(background, 0, 0, 1200, 600);
 
-			global.temp.welcomeEvent[threadID].joinTimeout = setTimeout(async function () {
-				const threadData = await threadsData.get(threadID);
-				if (threadData.settings.sendWelcomeMessage == false)
-					return;
-				const dataAddedParticipants = global.temp.welcomeEvent[threadID].dataAddedParticipants;
-				const dataBanned = threadData.data.banned_ban || [];
-				const threadName = threadData.threadName;
-				const userName = [],
-					mentions = [];
-				let multiple = dataAddedParticipants.length > 1;
+                    // ওভারলে (ঝাপসা কালো পর্দা যাতে লেখা ফুটে ওঠে)
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+                    ctx.fillRect(0, 0, 1200, 600);
 
-				for (const user of dataAddedParticipants) {
-					if (dataBanned.some((item) => item.id == user.userFbId))
-						continue;
-					userName.push(user.fullName);
-					mentions.push({
-						tag: user.fullName,
-						id: user.userFbId
-					});
-				}
+                    // ৪. প্রোফাইল পিকচার ড্রয়িং (সাদা বর্ডারসহ)
+                    const avatarUrl = `https://graph.facebook.com/${userID}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
+                    const avatar = await loadImage(avatarUrl);
 
-				if (userName.length == 0) return;
-				let { welcomeMessage = getLang("defaultWelcomeMessage") } =
-					threadData.data;
-				const form = {
-					mentions: welcomeMessage.match(/\{userNameTag\}/g) ? mentions : null
-				};
-				welcomeMessage = welcomeMessage
-					.replace(/\{userName\}|\{userNameTag\}/g, userName.join(", "))
-					.replace(/\{boxName\}|\{threadName\}/g, threadName)
-					.replace(
-						/\{multiple\}/g,
-						multiple ? getLang("multiple2") : getLang("multiple1")
-					)
-					.replace(
-						/\{session\}/g,
-						hours <= 10
-							? getLang("session1")
-							: hours <= 12
-								? getLang("session2")
-								: hours <= 18
-									? getLang("session3")
-									: getLang("session4")
-					);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(600, 200, 150, 0, Math.PI * 2, true);
+                    ctx.lineWidth = 15;
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.stroke();
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.drawImage(avatar, 450, 50, 300, 300);
+                    ctx.restore();
 
-				form.body = welcomeMessage;
+                    // ৫. টেক্সট স্টাইলিং (Premium Look)
+                    ctx.textAlign = "center";
+                    ctx.fillStyle = "#ffffff";
 
-				if (threadData.data.welcomeAttachment) {
-					const files = threadData.data.welcomeAttachment;
-					const attachments = files.reduce((acc, file) => {
-						acc.push(drive.getFile(file, "stream"));
-						return acc;
-					}, []);
-					form.attachment = (await Promise.allSettled(attachments))
-						.filter(({ status }) => status == "fulfilled")
-						.map(({ value }) => value);
-				}
-				message.send(form);
-				delete global.temp.welcomeEvent[threadID];
-			}, 1500);
-		}
-	}
+                    // নাম (বোল্ড গোল্ডেন কালার)
+                    ctx.font = "bold 70px Arial";
+                    const gradient = ctx.createLinearGradient(0, 0, 1200, 0);
+                    gradient.addColorStop(0, "#FFD700");
+                    gradient.addColorStop(1, "#FFA500");
+                    ctx.fillStyle = gradient;
+                    ctx.fillText(userName.toUpperCase(), 600, 420);
+
+                    // ওয়েলকাম মেসেজ
+                    ctx.font = "40px Arial";
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillText(`WELCOME TO ${threadName.toUpperCase()}`, 600, 480);
+
+                    // মেম্বার সংখ্যা
+                    ctx.font = "30px Arial";
+                    ctx.fillStyle = "#00FFCC";
+                    ctx.fillText(`YOU ARE OUR ${memberCount}th MEMBER ✨`, 600, 540);
+
+                    // ৬. ফাইল সেন্ড করা
+                    const cachePath = path.join(__dirname, "cache", `welcome_${userID}.png`);
+                    if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"));
+                    
+                    fs.writeFileSync(cachePath, canvas.toBuffer("image/png"));
+
+                    const msg = {
+                        body: `🌸 WELLCOME BABY 😗✌️, ${userName}!\n\n💖 আমাদের "${threadName}" গ্রুপে আপনাকে পেয়ে আমরা অনেক খুশি।\n🎀 আপনি আমাদের ${memberCount} তম মেম্বার। ভালো থাকবেন আমাদের সাথে! ✨`,
+                        attachment: fs.createReadStream(cachePath)
+                    };
+
+                    api.sendMessage(msg, threadID, () => {
+                        if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+                    });
+
+                } catch (err) {
+                    console.error("Welcome Event Error:", err);
+                }
+            }
+        }
+    }
 };
